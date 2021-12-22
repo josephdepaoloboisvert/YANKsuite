@@ -74,7 +74,7 @@ class YankAnalyzer():
         self.phase2_nc = netcdf.Dataset(self.out_dir + '/experiments/solvent.nc')  # Probably
 
         #MDA Universes reference (input files), complex(complex.nc -> state0), alchemical(complex.nc -> state-1), solvent(solvent.nc -> state0), vacuum(solvent.nc -> state-1)
-        self.ref = mda.Universe(self.yank_dir+self.s_phase1[0], self.s_phase2[1])
+        self.ref = mda.Universe(self.s_phase1[0], self.s_phase2[1])
 
         #End Initialization with performing all actions that need the NC files in memory
         # extract trajectories
