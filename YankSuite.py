@@ -37,7 +37,7 @@ class YankAnalyzer():
         self.yank_dir = full_path_to_yaml[:idx[-1]+1]  # Trailing / included
         print('Yank_dir is %s'%self.yank_dir)
         f = open(full_path_to_yaml, 'r')
-        yaml_script_contents = [line[:-2] if line.endswith('\n') else line for line in f.readlines()]
+        yaml_script_contents = [line[:-1] if line.endswith('\n') else line for line in f.readlines()]
         f.close()
 
         # Obtain Contents of generate yaml file ($OUTPUT/experiments/experiments.yaml)
@@ -47,7 +47,7 @@ class YankAnalyzer():
             self.out_dir = self.yank_dir + 'output'
         print('out_dir is %s'%self.out_dir)
         f = open(self.out_dir + '/experiments/experiments.yaml', 'r')
-        self.yaml_contents = [line[:-1] if line.endswith('\n') else line for line in f.readlines()]
+        self.yaml_contents = [line[:-2] if line.endswith('\n') else line for line in f.readlines()]
         f.close()
 
         #Retrieve other information as needed
