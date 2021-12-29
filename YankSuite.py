@@ -170,7 +170,7 @@ class YankAnalyzer():
         plt.savefig('%s/overlap_matrices/%s.png'%(self.out_dir, state_string))
 
 
-    def graph_rmsd(self, mda_universe, rmsd_select, save_name, align_string=None, ref_uni=None):
+    def graph_rmsd(self, mda_universe, rmsd_select, save_name=None, align_string=None, ref_uni=None):
         """
         Saves a graph of the RMSD of rmsd_select over the simulation provided as an mda_universe
         :param mda_universe: simulation to analyze (see self.load_traj())
@@ -200,7 +200,10 @@ class YankAnalyzer():
         plt.xlabel('Time (ps?)')
         plt.ylabel('RMSD (Angstroms)')
         plt.scatter(data[:, 0], data[:, 1])
-        plt.savefig('%s/rmsds/%s.png'%(self.out_dir, save_name))
+        if save_name is None:
+            plt.savefig('%s/rmsds/%s.png'%(self.out_dir, save_name))
+        else:
+            plt.savefig(save_name)
 
 
     def graph_distance(self, mda_universe, selection_1, selection_2, save_name=None, align_string=None, ref_uni=None):
