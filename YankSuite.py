@@ -65,7 +65,7 @@ class YankAnalyzer():
             self.s_phase2 = [self.yank_dir + element for element in ['solvent.prmtop','solvent.inpcrd']]
 
         # Setting up directory that data will be stored in
-        for dir in ['trajs', 'overlap_matrices', 'rmsds']:
+        for dir in ['trajs', 'overlap_matrices', 'rmsds', 'CoMs']:
             if not os.path.exists('%s/%s'%(self.out_dir, dir)):
                 os.mkdir('%s/%s'%(self.out_dir, dir))
 
@@ -170,19 +170,56 @@ class YankAnalyzer():
         plt.savefig('%s/overlap_matrices/%s.png'%(self.out_dir, state_string))
 
 
-    def graph_rmsd(self, mda_universe, rmsd_select, save_name, align_string=None):
+    def graph_rmsd(self, mda_universe, rmsd_select, save_name, align_string=None, ref_uni=None):
         """
         Saves a graph of the RMSD of rmsd_select over the simulation provided as an mda_universe
         :param mda_universe: simulation to analyze (see self.load_traj())
         :param rmsd_select: mdanalysis string of the group to obtain rmsd of
         :param save_name: save name for the rmsd graph as string ending in .png
         :param align_string: Perform alignment if desired (self.extract_traj() already aligns)
+        :param ref_uni: Allows user to pass in a reference MDAnalysis universe (default is self.ref)
         :return: Does not return; saves png to self.out_dir/rmsds/SAVE_NAME
         """
         sim = mda_universe
 
         # Align each trajectory to the reference
         if align_string is not None:
+            aligner = align.AlignTraj(sim, self.ref, select=align_string, in_memory=True).run()
+
+        # Evaluate the RMSD of GROUP_SELECT with respect to the reference frame
+        # Each [group]selection describes additional RMSDs to be computed after the structures
+        # have been superimposed according to select.
+        #This if block to allow this function to be more applicable
+        if ref_uni is not None:
+            ref_select = ref_uni.select_atoms(rmsd_select)
+        else:
+            ref_select = self.ref.select_atoms(rmsd_select)
+
+        sim_select = sim.select_atoms(rmsd_select)
+        data = np.array([[ts.time, rms.rmsd(sim_select.positions, ref_select.positions)] for ts in sim.trajectory])
+
+        plt.clf()
+        plt.title('RMSD of %s'%rmsd_select)
+        plt.xlabel('Time')
+        plt.ylabel('RMSD (Angstroms)')
+        plt.scatter(data[:, 0], data[:, 1])
+        plt.savefig('%s/rmsds/%s.png'%(self.out_dir, save_name))
+
+
+    def graph_distance(self, mda_universe, selection_1, selection_2, save_name=None, align_string=False):
+        """
+        graphs the distance between the center of mass of two groups of atoms over the trajectory provided
+        :param mda_universe: MDAnalysis Universe object with trajectory loaded
+        :param selection_1: MDAnalysis string selection for first atom group
+        :param selection_2: MDAnalysis string selection for second atom group
+        :param save_name: if not None, will be saved as the argument instead of default
+        :param align_string: Perform alignment if desired (self.extract_traj() already aligns)
+        :return: does not return, saves png of graph to self.out_dir/CoMs/SAVE_NAME
+        """
+        sim = mda_universe
+
+        # Align each trajectory to the reference
+        if align_string:
             aligner = align.AlignTraj(sim, self.ref, select=align_string, in_memory=True).run()
 
         # Evaluate the RMSD of GROUP_SELECT with respect to the reference frame
