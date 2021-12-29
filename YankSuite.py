@@ -6,9 +6,10 @@ from MDAnalysis.coordinates.memory import MemoryReader
 from MDAnalysis.analysis import rms
 from MDAnalysis.analysis import align
 import netCDF4 as netcdf
-import sys
+
 from yank.experiment import *
 from yank.analyze import *
+from openmm_yank_obc2_all import *
 
 class YankMultiAnalyzer():
     """A Class for comparing multiple YankAnalyzers"""
@@ -197,9 +198,9 @@ class YankAnalyzer():
 
         plt.clf()
         plt.title('RMSD of %s'%rmsd_select)
-        plt.xlabel('Time (ps?)')
+        plt.xlabel('Time (ns)')
         plt.ylabel('RMSD (Angstroms)')
-        plt.scatter(data[:, 0], data[:, 1])
+        plt.scatter(data[:, 0]/1000, data[:, 1])
         if save_name is None:
             plt.savefig('%s/rmsds/%s.png'%(self.out_dir, save_name))
         else:
@@ -240,18 +241,31 @@ class YankAnalyzer():
             save_name = 'CoM_%s_%s'%(selection_1, selection_2)
         plt.savefig('%s/CoM_distances/%s.png'%(self.out_dir, save_name))
 
-    def YankBFEAnalysis(self):
+    def YankBFEAnalysis(self, auto=True):
         """
         Perform the YANK binding free energy analysis
         :return:
         """
         analysis_yaml = '%s/experiments/analysis.yaml'%self.out_dir
         analyzer = yank.analyze.ExperimentAnalyzer(analysis_yaml)
-        return analyzer.auto_analyze()
+        if auto:
+            return analyzer.auto_analyze()
+        else:
+            return analyzer
 
 
-    def get_GSBA_energies(self):
-        raise Exception('Still under development')
+    def get_GSBA_energies(self, prmtops, fname_dat, my_platform='CPU'):
+        print('Not Fully Implemented GBSA ENERGY')
+        complex_prmtop, ligand_prmtop, protein_prmtop = prmtops[0], prmtops[1], prmtops[2]
+        fname_NC = self.out_dir + '/experiments/complex.nc'
+        E_com = run_complex(complex_prmtop, fname_NC, my_platform)
+        E_lig = run_ligand(ligand_prmtop, fname_NC, my_platform)
+        E_prt = run_protein(protein_prmtop, fname_NC, my_platform)
+        fout = open(fname_dat, 'w', 1)
+        print("#  E(com)[kcal/mol]   E_lig    E_prt", file=fout)
+        for it in range(len(E_com)):
+            print(it, E_com[it], E_lig[it], E_prt[it], file=fout)
+        fout.close()
 
 
 
