@@ -1,4 +1,5 @@
 import yaml
+import os
 import matplotlib.pyplot as plt
 import MDAnalysis as mda
 import yank.analyze
@@ -10,6 +11,7 @@ import netCDF4 as netcdf
 from yank.experiment import *
 from yank.analyze import *
 from openmm_yank_obc2_all import *
+from copy_yank_nc import *
 
 class YankMultiAnalyzer():
     """A Class for comparing multiple YankAnalyzers"""
@@ -17,18 +19,31 @@ class YankMultiAnalyzer():
         """Format of in_dictionary is keys = string name; value = list of YankAnalyzer objects that are repeats of each other
         EX: Protein_in_dict = {'LIG1': [YankAnalyzerObjectFromRepeat1, YankAnalyzerObjectFromRepeat2, YankAnalyzerObjectFromRepeat3], etc... }
         Every value-list should have at least two entries and the overall dictionary should have at least one entry."""
+        self.data_dict = in_dictionary
 
 
-    def convergence_of_rpts(self):
+    def convergence_of_rpts(self, data_dict_key, discard = 0.2, res = 50):
         """Analyze the convergence of repeats (see init for how repeats are defined)"""
+        #copy_yank_nc is used to create many ncs to pass into the YankBFEAnalysis method
+        analyzers = [sim.YankBFEAnalysis(auto=False) for sim in self.data_dict[data_dict_key]]
+        #Validate that sims have the same parameters (such as length)
+        truth_table = [analyzers[i].get_general_simulation_data() == analyzers[i+1].get_general_simulation_data()
+                       for i in range(len(analyzers) - 1)]
+        if False in truth_table:
+            raise Exception('Yank simulations were found to have different paramters')
+
+        #Will create netcdf files to analyze every res iterations beginning discard% along the simulation
+
+
 
 class YankAnalyzer():
-    def __init__(self, full_path_to_yaml):
+    def __init__(self, full_path_to_yaml, do_trajs=False):
         """
         Python class for managing the information exracted from YANK simulations
 
         PARAMETERS:
         full_path_to_yaml: full path to the yaml file which ran the simulation type(str)
+        do_trajs: Bool for whether to extract the physically meaningful trajs on init
 
         RETURNS:
             does not return
@@ -79,11 +94,8 @@ class YankAnalyzer():
 
         #End Initialization with performing all actions that need the NC files in memory
         # extract trajectories
-        self.extract_traj('complex', 0, 'all')
-        self.extract_traj('complex', -1, 'protein')
-        self.extract_traj('complex', -1, self.dsl_lig)
-        self.extract_traj('solvent', 0, 'all')
-        self.extract_traj('solvent', -1, self.dsl_lig)
+        if do_trajs:
+            self.extract_meaningful_trajs()
 
         #Make Replica Overlap Matrices
         self.graph_overlap_matrix('complex')
@@ -97,11 +109,12 @@ class YankAnalyzer():
         :param sel_str_store: MDAnalysis selection string to store trajectory of
         :param memory: if memory, the extracted trajectory will be returned as an MDAnalysis Universe Object
 
-        extract_trajs('complex', 0, 'all')
-        extract_trajs('complex', -1, 'protein')
-        extract_trajs('complex', -1, self.dsl_lig)
-        extract_trajs('solvent', 0, 'all')
-        extract_trajs('solvent', -1, self.dsl_lig)
+        "Meaningful" trajs
+        extract_trajs('complex', 0, 'all') #protein and ligand together
+        extract_trajs('complex', -1, 'protein') # protein independent of ligand's presence
+        extract_trajs('complex', -1, self.dsl_lig) # ligand independent of protein's presence (eff. vacuum)
+        extract_trajs('solvent', 0, 'all') # ligand in solvent
+        extract_trajs('solvent', -1, self.dsl_lig) # ligand indepedent of solvent (eff. vacuum)
         """
         if state_string == 'complex':
             nc = self.phase1_nc
@@ -142,8 +155,22 @@ class YankAnalyzer():
         remarks = '\n' + '\n'.join(remarks)
         sel_store.write(store_dcd.replace('.dcd','.pdb'), remarks=remarks)
 
+    def extract_meaningful_trajs(self):
+        # trajs are at '%s/trajs/%s_%s_%s.dcd' % (self.out_dir, state_string, i_state, sel_str_store)
+        for keys in [['complex', 0, 'all'], ['complex', -1, 'protein'], ['complex', -1, self.dsl_lig],
+                     ['solvent', 0, 'all'], ['solvent', -1, self.dsl_lig]]:
 
-    def load_traj(self, state_string, state_index, sel_str_store):
+            if keys[0] == 'complex' and keys[2] != self.dsl_lig:
+                sel_str_align = 'backbone'
+            else:
+                sel_str_align = self.dsl_lig
+
+            if not os.path.isfile('%s/trajs/%s_%s_%s.dcd'%(self.out_dir, keys[0], keys[1], keys[2])):
+                self.extract_traj(keys[0], keys[1], keys[2], sel_str_align)
+            else:
+                print('Traj already found for %s, state=%s, state=%s, store=%s'%(self.out_dir, keys[0], keys[1], keys[2]))
+
+    def load_traj_as_MDAU(self, state_string, state_index, sel_str_store):
         return mda.Universe('%s/trajs/%s_%s_%s.dcd'%(self.out_dir, state_string, state_index, sel_str_store))
 
 
