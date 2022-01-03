@@ -11,7 +11,7 @@ import netCDF4 as netcdf
 from yank.experiment import *
 from yank.analyze import *
 from openmm_yank_obc2_all import *
-from copy_yank_nc import *
+from slice_yank_nc import *
 
 class YankMultiAnalyzer():
     """A Class for comparing multiple YankAnalyzers"""
@@ -25,15 +25,30 @@ class YankMultiAnalyzer():
     def convergence_of_rpts(self, data_dict_key, discard = 0.2, res = 50):
         """Analyze the convergence of repeats (see init for how repeats are defined)"""
         #copy_yank_nc is used to create many ncs to pass into the YankBFEAnalysis method
-        analyzers = [sim.YankBFEAnalysis(auto=False) for sim in self.data_dict[data_dict_key]]
+        sims = [sim for sim in self.data_dict[data_dict_key]]
+        analyzers = [sim.YankBFEAnalysis(auto=False) for sim in sims]
         #Validate that sims have the same parameters (such as length)
         truth_table = [analyzers[i].get_general_simulation_data() == analyzers[i+1].get_general_simulation_data()
                        for i in range(len(analyzers) - 1)]
         if False in truth_table:
-            raise Exception('Yank simulations were found to have different paramters')
+            raise Exception('Yank simulations were found to have different parameters')
 
         #Will create netcdf files to analyze every res iterations beginning discard% along the simulation
+        # Ex. res=50 discard=0.2 gives BFE every 50 iterations for the last 80% of a simulation
+        os.mkdir('temp_ncs')
+        max_iterations = analyzers[0].get_general_simulation_data()['complex']['iterations'] # I think
+        first_iter = int(max_iterations * discard)
+        nc_iters = np.arange(first_iter, max_iterations, res)
 
+        j = 0
+        for sim in sims:
+            sim_num = j
+            j += 1
+            os.mkdir('temp_ncs/sim%s'%sim_num)
+            for iter_num in nc_iters:
+                #_generate_nc_slice(self, phase, up2iter, out_nc_name):
+                for i in [1, 2]:
+                    sim._generate_nc_slice(i, iter_num, 'temp_ncs/sim%s/%s_%s.nc'%(sim_num, i, iter_num))
 
 
 class YankAnalyzer():
@@ -100,6 +115,23 @@ class YankAnalyzer():
         #Make Replica Overlap Matrices
         self.graph_overlap_matrix('complex')
         self.graph_overlap_matrix('solvent')
+
+
+    def _generate_nc_slice(self, phase, up2iter, out_nc_name):
+        """
+        :param phase: int 1 or 2 for phase 1 or 2 ('complex' or 'solvent')
+        :param up2iter: will copy the src nc file up to and including this iteration
+        :param out_nc_name: path to write out_nc to
+        :return: does not return
+        """
+        if phase == 1:
+            src_nc = self.phase1_nc
+        elif phase == 2:
+            src_nc = self.phase2_nc
+        else:
+            raise Exception('phase should be 1 or 2')
+
+        slice_yank_nc(src_nc, out_nc_name, up2iter)
 
     def extract_traj(self, state_string, state_index, sel_str_store, sel_str_align):
         """
@@ -273,8 +305,8 @@ class YankAnalyzer():
         Perform the YANK binding free energy analysis
         :return:
         """
-        analysis_yaml = '%s/experiments/analysis.yaml'%self.out_dir
-        analyzer = yank.analyze.ExperimentAnalyzer(analysis_yaml)
+        analysis_dir = '%s/experiments/analysis.yaml'%self.out_dir
+        analyzer = yank.analyze.ExperimentAnalyzer(analysis_dir)
         if auto:
             return analyzer.auto_analyze()
         else:
@@ -293,9 +325,6 @@ class YankAnalyzer():
         for it in range(len(E_com)):
             print(it, E_com[it], E_lig[it], E_prt[it], file=fout)
         fout.close()
-
-
-
 
 
 #Utility Functions
